@@ -156,13 +156,23 @@ class GadgetFieldInfo(SPHFieldInfo):
 
                 def _temperature(field, data):
                     gamma = 5.0 / 3.0
-                    ret = (
-                        data[ptype, "InternalEnergy"]
-                        * (gamma - 1)
-                        * data.ds.mu
-                        * mp
-                        / kb
-                    )
+                    # Rennehan
+                    try:
+                        ret = (
+                            data[ptype, "InternalEnergy"]
+                            * (gamma - 1)
+                            * data.ds.mu
+                            * mp
+                            / kb
+                        )
+                    except:
+                        ret = (
+                            data[ptype, "InternalEnergies"]
+                            * (gamma - 1)
+                            * data.ds.mu
+                            * mp
+                            / kb
+                        )
                     return ret.in_units(self.ds.unit_system["temperature"])
 
             self.add_field(

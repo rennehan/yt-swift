@@ -157,7 +157,7 @@ class GadgetBinaryHeader:
         for filename in [self.filename, self.filename + ".0"]:
             if os.path.exists(filename):
                 return open(filename, "rb")
-        raise FileNotFoundError(f"Snapshot file {self.filename} does not exist.")
+        raise RuntimeError(f"Snapshot file {self.filename} does not exist.")
 
     def validate(self):
         """Validate data integrity."""
@@ -260,6 +260,8 @@ class GadgetDataset(SPHDataset):
                 ):
                     filename = os.path.join(filename, f)
                     break
+        # Rennehan
+        self.filename = filename
         self._header = GadgetBinaryHeader(filename, header_spec)
         header_size = self._header.size
         if header_size != [256]:
@@ -348,19 +350,59 @@ class GadgetDataset(SPHDataset):
         self.gen_hsmls = False
         return self._header.value
 
+    # Rennehan
+    def _get_info_attributes(self, dataset):
+        """
+        Gets the information from a header-style dataset and returns it as a
+        python dictionary.
+
+        Example: self._get_info_attributes(header) returns a dictionary of all
+        of the information in the Header.attrs.
+        """
+
+        with h5py.File(self.filename, mode="r") as handle:
+            header = dict(handle[dataset].attrs)
+
+        return header
+
     def _parse_parameter_file(self):
 
         hvals = self._get_hvals()
 
-        self.dimensionality = 3
+        # Rennehan
+        swift = False
+        try:
+            #policy = self._get_info_attributes("Policy")
+            # These are the parameterfile parameters from *.yml at runtime
+            parameters = self._get_info_attributes("Parameters")
+            # Not used in this function, but passed to parameters
+            #hydro = self._get_info_attributes("HydroScheme")
+            #subgrid = self._get_info_attributes("SubgridScheme")
+            swift = True
+        except:
+            pass
+
+        # Rennehan
+        if swift:
+            only_on_root(mylog.info, "SwiftDataset!")
+            self.dimensionality = int(hvals["Dimension"])
+        else:
+            only_on_root(mylog.info, "Not SwiftDataset!")
+            self.dimensionality = 3
+
         self.refine_by = 2
         self.parameters["HydroMethod"] = "sph"
         # Set standard values
 
+        # Rennehan
+        if swift:
+            self.domain_right_edge = np.asarray(hvals["BoxSize"])
+            self.domain_left_edge = np.zeros_like(self.domain_right_edge)
+        else:
         # We may have an overridden bounding box.
-        if self.domain_left_edge is None and hvals["BoxSize"] != 0:
-            self.domain_left_edge = np.zeros(3, "float64")
-            self.domain_right_edge = np.ones(3, "float64") * hvals["BoxSize"]
+            if self.domain_left_edge is None and hvals["BoxSize"] != 0:
+                self.domain_left_edge = np.zeros(3, "float64")
+                self.domain_right_edge = np.ones(3, "float64") * hvals["BoxSize"]
 
         self.domain_dimensions = np.ones(3, "int32")
         self._periodicity = (True, True, True)
@@ -368,22 +410,30 @@ class GadgetDataset(SPHDataset):
         self.cosmological_simulation = 1
 
         try:
-            self.current_redshift = hvals["Redshift"]
+            # Rennehan
+            self.current_redshift = float(hvals["Redshift"])
         except KeyError:
             # Probably not a cosmological dataset, we should just set
             # z = 0 and let the user know
             self.current_redshift = 0.0
             only_on_root(mylog.info, "Redshift is not set in Header. Assuming z=0.")
 
-        try:
-            self.omega_lambda = hvals["OmegaLambda"]
-            self.omega_matter = hvals["Omega0"]
-            self.hubble_constant = hvals["HubbleParam"]
-        except KeyError:
-            # If these are not set it is definitely not a cosmological dataset.
-            self.omega_lambda = 0.0
-            self.omega_matter = 1.0  # Just in case somebody asks for it.
-            # Hubble is set below for Omega Lambda = 0.
+        # Rennehan
+        if swift:
+            self.omega_lambda = float(parameters["Cosmology:Omega_lambda"])
+            self.omega_matter = float(parameters["Cosmology:Omega_m"])
+            # This is "little h"
+            self.hubble_constant = float(parameters["Cosmology:h"])
+        else:
+            try:
+                self.omega_lambda = hvals["OmegaLambda"]
+                self.omega_matter = hvals["Omega0"]
+                self.hubble_constant = hvals["HubbleParam"]
+            except KeyError:
+                # If these are not set it is definitely not a cosmological dataset.
+                self.omega_lambda = 0.0
+                self.omega_matter = 1.0  # Just in case somebody asks for it.
+                # Hubble is set below for Omega Lambda = 0.
 
         # According to the Gadget manual, OmegaLambda will be zero for
         # non-cosmological datasets.  However, it may be the case that
@@ -444,6 +494,30 @@ class GadgetDataset(SPHDataset):
     def _set_code_unit_attributes(self):
         # If no units passed in by user, set a sane default (Gadget-2 users
         # guide).
+        # Rennehan
+        try:
+            units = self._get_info_attributes("Units")
+
+            if self.cosmological_simulation == 1:
+                msg = "Assuming length units are in comoving centimetres"
+                only_on_root(mylog.info, msg)
+                self.length_unit = self.quan(
+                    float(units["Unit length in cgs (U_L)"]), "cmcm"
+                )
+            else:
+                msg = "Assuming length units are in physical centimetres"
+                only_on_root(mylog.info, msg)
+                self.length_unit = self.quan(float(units["Unit length in cgs (U_L)"]), "cm")
+
+            self.mass_unit = self.quan(float(units["Unit mass in cgs (U_M)"]), "g")
+            self.time_unit = self.quan(float(units["Unit time in cgs (U_t)"]), "s")
+            self.temperature_unit = self.quan(
+                float(units["Unit temperature in cgs (U_T)"]), "K"
+            )
+
+            return
+        except:
+            pass
         if self._unit_base is None:
             if self.cosmological_simulation == 1:
                 only_on_root(
@@ -623,7 +697,10 @@ class GadgetHDF5Dataset(GadgetDataset):
         hvals["Massarr"] = hvals["MassTable"]
         sph_ptypes = [ptype for ptype in self._sph_ptypes if ptype in handle]
         if sph_ptypes:
+            # Rennehan
             self.gen_hsmls = "SmoothingLength" not in handle[sph_ptypes[0]]
+            if self.gen_hsmls:
+                self.gen_hsmls = "SmoothingLengths" not in handle[sph_ptypes[0]]
         else:
             self.gen_hsmls = False
         # Later versions of Gadget and its derivatives have a "Parameters"
@@ -655,9 +732,14 @@ class GadgetHDF5Dataset(GadgetDataset):
         self.omega_matter = self.parameters["Omega0"]
         self.hubble_constant = self.parameters["HubbleParam"]
 
-        if self.domain_left_edge is None and self.parameters["BoxSize"] != 0:
-            self.domain_left_edge = np.zeros(3, "float64")
-            self.domain_right_edge = np.ones(3, "float64") * self.parameters["BoxSize"]
+        # Rennehan
+        if len(self.parameters["BoxSize"]) > 1:
+            self.domain_right_edge = self.parameters["BoxSize"]
+            self.domain_left_edge = np.zeros_like(self.domain_right_edge)
+        else:
+            if self.domain_left_edge is None and self.parameters["BoxSize"] != 0:
+                self.domain_left_edge = np.zeros(3, "float64")
+                self.domain_right_edge = np.ones(3, "float64") * self.parameters["BoxSize"]
 
         self.domain_dimensions = np.ones(3, "int32")
 
@@ -712,11 +794,12 @@ class GadgetHDF5Dataset(GadgetDataset):
             valid = False
             pass
 
-        try:
-            fh = h5py.File(filename, mode="r")
-            valid = fh["Header"].attrs["Code"].decode("utf-8") != "SWIFT"
-            fh.close()
-        except (OSError, KeyError, ImportError):
-            pass
+        #Rennehan
+        #try:
+        #    fh = h5py.File(filename, mode="r")
+        #    valid = fh["Header"].attrs["Code"].decode("utf-8") != "SWIFT"
+        #    fh.close()
+        #except (OSError, KeyError, ImportError):
+        #    pass
 
         return valid

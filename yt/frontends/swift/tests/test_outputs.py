@@ -1,107 +1,100 @@
-import numpy as np
+from collections import OrderedDict
 
-from yt import load
-from yt.frontends.swift.api import SwiftDataset
-from yt.testing import ParticleSelectionComparison, assert_almost_equal, requires_file
-from yt.utilities.on_demand_imports import _h5py as h5py
+import yt
+from yt.frontends.gizmo.api import GizmoDataset
+from yt.frontends.gizmo.fields import metal_elements
+from yt.testing import requires_file
+from yt.utilities.answer_testing.framework import requires_ds, sph_answer
 
-keplerian_ring = "KeplerianRing/keplerian_ring_0020.hdf5"
-EAGLE_6 = "EAGLE_6/eagle_0005.hdf5"
+# This maps from field names to weight field names to use for projections
+fields = OrderedDict(
+    [
+        (("gas", "density"), None),
+        (("gas", "temperature"), ("gas", "density")),
+        (("gas", "metallicity"), ("gas", "density")),
+        (("gas", "O_metallicity"), ("gas", "density")),
+        (("gas", "velocity_magnitude"), None),
+    ]
+)
 
-# Combined the tests for loading a file and ensuring the units have been
-# implemented correctly to save time on re-loading a dataset
-@requires_file(keplerian_ring)
-def test_non_cosmo_dataset():
-    ds = load(keplerian_ring)
-    assert type(ds) is SwiftDataset
+g64 = "gizmo_64/output/snap_N64L16_135.hdf5"
+gmhd = "gizmo_mhd_mwdisk/gizmo_mhd_mwdisk.hdf5"
+gmhd_bbox = [[-400, 400]] * 3
 
-    field = ("gas", "density")
+
+@requires_ds(g64, big_data=True)
+def test_gizmo_64():
+    ds = yt.load(g64)
+    assert isinstance(ds, GizmoDataset)
+    for test in sph_answer(ds, "snap_N64L16_135", 524288, fields):
+        test_gizmo_64.__name__ = test.description
+        yield test
+
+
+@requires_file(gmhd)
+def test_gizmo_mhd():
+    """
+    Magnetic fields should be loaded correctly when they are present.
+    """
+    ds = yt.load(gmhd, bounding_box=gmhd_bbox, unit_system="code")
     ad = ds.all_data()
-    yt_density = ad[field]
-    yt_coords = ad[(field[0], "position")]
+    ptype = "PartType0"
 
-    # load some data the old fashioned way
-    fh = h5py.File(ds.parameter_filename, mode="r")
-    part_data = fh["PartType0"]
+    # Test vector magnetic field
+    fmag = "particle_magnetic_field"
+    f = ad[ptype, fmag]
+    assert str(f.units) == "code_magnetic"
+    assert f.shape == (409013, 3)
 
-    # set up a conversion factor by loading the unit mas and unit length in cm,
-    # and then converting to proper coordinates
-    units = fh["Units"]
-    units = dict(units.attrs)
-    density_factor = float(units["Unit mass in cgs (U_M)"])
-    density_factor /= float(units["Unit length in cgs (U_L)"]) ** 3
-
-    # now load the raw density and coordinates
-    raw_density = part_data["Density"][:].astype("float64") * density_factor
-    raw_coords = part_data["Coordinates"][:].astype("float64")
-    fh.close()
-
-    # sort by the positions - yt often loads in a different order
-    ind_raw = np.lexsort((raw_coords[:, 2], raw_coords[:, 1], raw_coords[:, 0]))
-    ind_yt = np.lexsort((yt_coords[:, 2], yt_coords[:, 1], yt_coords[:, 0]))
-    raw_density = raw_density[ind_raw]
-    yt_density = yt_density[ind_yt]
-
-    # make sure we are comparing fair units
-    assert str(yt_density.units) == "g/cm**3"
-
-    # make sure the actual values are the same
-    assert_almost_equal(yt_density.d, raw_density)
+    # Test component magnetic fields
+    for axis in "xyz":
+        f = ad[ptype, fmag + "_" + axis]
+        assert str(f.units) == "code_magnetic"
+        assert f.shape == (409013,)
 
 
-@requires_file(keplerian_ring)
-def test_non_cosmo_dataset_selection():
-    ds = load(keplerian_ring)
-    psc = ParticleSelectionComparison(ds)
-    psc.run_defaults()
+@requires_file(gmhd)
+def test_gas_particle_fields():
+    """
+    Test fields set up in GizmoFieldInfo.setup_gas_particle_fields.
+    """
+    ds = yt.load(gmhd, bounding_box=gmhd_bbox)
+
+    ptype = "PartType0"
+    derived_fields = []
+    # Add species fields
+    for species in ["H_p0", "H_p1"]:
+        for suffix in ["density", "fraction", "mass", "number_density"]:
+            derived_fields += [f"{species}_{suffix}"]
+    for species in metal_elements:
+        derived_fields += [f"{species}_nuclei_mass_density"]
+    # Add magnetic fields
+    derived_fields += [f"particle_magnetic_field_{axis}" for axis in "xyz"]
+    # Check
+    for field in derived_fields:
+        assert (ptype, field) in ds.derived_field_list
+
+    ptype = "gas"
+    derived_fields = []
+    for species in ["H_p0", "H_p1"]:
+        for suffix in ["density", "number_density"]:
+            derived_fields += [f"{species}_{suffix}"]
+    for species in metal_elements:
+        for suffix in ["nuclei_mass_density", "metallicity"]:
+            derived_fields += [f"{species}_{suffix}"]
+    derived_fields += [f"magnetic_field_{axis}" for axis in "xyz"]
+    for field in derived_fields:
+        assert (ptype, field) in ds.derived_field_list
 
 
-@requires_file(EAGLE_6)
-def test_cosmo_dataset():
-    ds = load(EAGLE_6)
-    assert type(ds) == SwiftDataset
+@requires_file(gmhd)
+def test_star_particle_fields():
+    """
+    Test fields set up in GizmoFieldInfo.setup_star_particle_fields.
+    """
+    ds = yt.load(gmhd, bounding_box=gmhd_bbox)
 
-    field = ("gas", "density")
-    ad = ds.all_data()
-    yt_density = ad[field]
-    yt_coords = ad[(field[0], "position")]
-
-    # load some data the old fashioned way
-    fh = h5py.File(ds.parameter_filename, mode="r")
-    part_data = fh["PartType0"]
-
-    # set up a conversion factor by loading the unit mas and unit length in cm,
-    # and then converting to proper coordinates
-    units = fh["Units"]
-    units = dict(units.attrs)
-    density_factor = float(units["Unit mass in cgs (U_M)"])
-    density_factor /= float(units["Unit length in cgs (U_L)"]) ** 3
-
-    # add the redshift factor
-    header = fh["Header"]
-    header = dict(header.attrs)
-    density_factor *= (1.0 + float(header["Redshift"])) ** 3
-
-    # now load the raw density and coordinates
-    raw_density = part_data["Density"][:].astype("float64") * density_factor
-    raw_coords = part_data["Coordinates"][:].astype("float64")
-    fh.close()
-
-    # sort by the positions - yt often loads in a different order
-    ind_raw = np.lexsort((raw_coords[:, 2], raw_coords[:, 1], raw_coords[:, 0]))
-    ind_yt = np.lexsort((yt_coords[:, 2], yt_coords[:, 1], yt_coords[:, 0]))
-    raw_density = raw_density[ind_raw]
-    yt_density = yt_density[ind_yt]
-
-    # make sure we are comparing fair units
-    assert str(yt_density.units) == "g/cm**3"
-
-    # make sure the actual values are the same
-    assert_almost_equal(yt_density.d, raw_density)
-
-
-@requires_file(EAGLE_6)
-def test_cosmo_dataset_selection():
-    ds = load(EAGLE_6)
-    psc = ParticleSelectionComparison(ds)
-    psc.run_defaults()
+    ptype = "PartType4"
+    derived_fields = ["creation_time", "age"]
+    for field in derived_fields:
+        assert (ptype, field) in ds.derived_field_list
