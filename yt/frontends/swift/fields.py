@@ -26,7 +26,7 @@ class SwiftFieldInfo(GadgetFieldInfo):
         ("MaximumTemperature", ("K", [], None)),
         ("Temperature", ("K", ["temperature"], None)),
         ("Epsilon", ("code_length", [], None)),
-        ("SmoothedMetalMassFractions", ("code_metallicity", ["metallicity"], None)),
+        ("MetalMassFractions", ("code_metallicity", ["metallicity"], None)),
         ("Metals", ("code_metallicity", ["metallicity"], None)),
         ("Metallicity", ("code_metallicity", ["metallicity"], None)),
         ("Phi", ("code_length", [], None)),
