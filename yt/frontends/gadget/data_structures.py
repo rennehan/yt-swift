@@ -423,6 +423,7 @@ class GadgetDataset(SPHDataset):
         if swift:
             self.omega_lambda = float(parameters["Cosmology:Omega_lambda"])
             self.omega_matter = float(parameters["Cosmology:Omega_cdm"])
+            self.omega_matter += float(parameters["Cosmology:Omega_b"])
             # This is "little h"
             self.hubble_constant = float(parameters["Cosmology:h"])
         else:
