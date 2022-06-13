@@ -219,6 +219,7 @@ class GadgetDataset(SPHDataset):
     _particle_velocity_name = "Velocities"
     _sph_ptypes = ("Gas",)
     _suffix = ""
+    filename = ""
 
     def __init__(
         self,
@@ -421,7 +422,7 @@ class GadgetDataset(SPHDataset):
         # Rennehan
         if swift:
             self.omega_lambda = float(parameters["Cosmology:Omega_lambda"])
-            self.omega_matter = float(parameters["Cosmology:Omega_m"])
+            self.omega_matter = float(parameters["Cosmology:Omega_cdm"])
             # This is "little h"
             self.hubble_constant = float(parameters["Cosmology:h"])
         else:
@@ -694,7 +695,8 @@ class GadgetHDF5Dataset(GadgetDataset):
         hvals.update((str(k), v) for k, v in handle["/Header"].attrs.items())
         # Compat reasons.
         hvals["NumFiles"] = hvals["NumFilesPerSnapshot"]
-        hvals["Massarr"] = hvals["MassTable"]
+        # Rennehan: Only support 6 PartTypes at the moment
+        hvals["Massarr"] = hvals["MassTable"][0:6]
         sph_ptypes = [ptype for ptype in self._sph_ptypes if ptype in handle]
         if sph_ptypes:
             # Rennehan

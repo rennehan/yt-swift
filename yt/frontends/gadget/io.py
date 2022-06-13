@@ -149,7 +149,11 @@ class IOHandlerGadgetHDF5(IOHandlerSPH):
         else:
             fn = data_file.filename
         with h5py.File(fn, mode="r") as f:
-            ds = f[ptype]["SmoothingLength"][si:ei, ...]
+            # Rennehan
+            try:
+                ds = f[ptype]["SmoothingLength"][si:ei, ...]
+            except KeyError:
+                ds = f[ptype]["SmoothingLengths"][si:ei, ...]
             dt = ds.dtype.newbyteorder("N")  # Native
             if position_dtype is not None and dt < position_dtype:
                 # Sometimes positions are stored in double precision
