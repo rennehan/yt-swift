@@ -517,6 +517,16 @@ class GadgetDataset(SPHDataset):
                 float(units["Unit temperature in cgs (U_T)"]), "K"
             )
 
+            specific_energy_unit = (self.length_unit / self.time_unit)**2.0
+            if self.cosmological_simulation == 1:
+                # To get comoving -> physical
+                # a**(3.0 * (1.0 - gamma))
+                # 3.0 * (1.0 - 5.0/3.0) = 3.0 * (-2.0 / 3.0) = -2.0
+                specific_energy_unit = self.quan(self.length_unit / self.time_unit,
+                    "(cmcm/s)**2 * a**-2")
+            specific_energy_unit = _fix_unit_ordering(specific_energy_unit)
+            self.specific_energy_unit = self.quan(*specific_energy_unit)
+
             return
         except:
             pass
