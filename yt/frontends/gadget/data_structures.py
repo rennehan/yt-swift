@@ -496,10 +496,16 @@ class GadgetDataset(SPHDataset):
     def _set_code_unit_attributes(self):
         # If no units passed in by user, set a sane default (Gadget-2 users
         # guide).
+
         # Rennehan
+        swift = False
         try:
             units = self._get_info_attributes("Units")
+            swift = True
+        except Exception as e:
+            only_on_root(mylog.info, "No SwiftDataset units!")
 
+        if swift:
             if self.cosmological_simulation == 1:
                 msg = "Assuming length units are in comoving centimetres"
                 only_on_root(mylog.info, msg)
@@ -513,23 +519,22 @@ class GadgetDataset(SPHDataset):
 
             self.mass_unit = self.quan(float(units["Unit mass in cgs (U_M)"]), "g")
             self.time_unit = self.quan(float(units["Unit time in cgs (U_t)"]), "s")
+            self.velocity_unit = self.quan(float(self.length_unit / self.time_unit), "cm / s")
             self.temperature_unit = self.quan(
                 float(units["Unit temperature in cgs (U_T)"]), "K"
             )
 
-            specific_energy_unit = (self.length_unit / self.time_unit)**2.0
+            specific_energy_unit = self.velocity_unit**2.0
             if self.cosmological_simulation == 1:
                 # To get comoving -> physical
                 # a**(3.0 * (1.0 - gamma))
                 # 3.0 * (1.0 - 5.0/3.0) = 3.0 * (-2.0 / 3.0) = -2.0
-                specific_energy_unit = self.quan(self.length_unit / self.time_unit,
-                    "(cmcm/s)**2 * a**-2")
-            specific_energy_unit = _fix_unit_ordering(specific_energy_unit)
-            self.specific_energy_unit = self.quan(*specific_energy_unit)
+                specific_energy_unit = self.quan(self.velocity_unit**2.0,
+                    "(cm/s)**2 * a**-2")
+            self.specific_energy_unit = specific_energy_unit
 
             return
-        except:
-            pass
+
         if self._unit_base is None:
             if self.cosmological_simulation == 1:
                 only_on_root(
