@@ -526,12 +526,13 @@ class GadgetDataset(SPHDataset):
 
             specific_energy_unit = self.velocity_unit**2.0
             if self.cosmological_simulation == 1:
-                # To get comoving -> physical
-                # a**(3.0 * (1.0 - gamma))
-                # 3.0 * (1.0 - 5.0/3.0) = 3.0 * (-2.0 / 3.0) = -2.0
-                specific_energy_unit = self.quan(self.velocity_unit**2.0,
-                    "(cm/s)**2 * a**-2")
-            self.specific_energy_unit = specific_energy_unit
+                self.velocity_unit = self.quan(float(self.length_unit / self.time_unit), "cm * s**-1 * a**-1")
+            else:
+                self.velocity_unit = self.quan(float(self.length_unit / self.time_unit), "cm * s**-1")
+            # To get comoving -> physical
+            # a**(3.0 * (1.0 - gamma))
+            # 3.0 * (1.0 - 5.0/3.0) = 3.0 * (-2.0 / 3.0) = -2.0
+            self.specific_energy_unit = self.velocity_unit**2.0
 
             return
 
