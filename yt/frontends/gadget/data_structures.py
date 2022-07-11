@@ -372,23 +372,33 @@ class GadgetDataset(SPHDataset):
 
         # Rennehan
         swift = False
+        pkdgrav = False
         try:
-            #policy = self._get_info_attributes("Policy")
-            # These are the parameterfile parameters from *.yml at runtime
-            parameters = self._get_info_attributes("Parameters")
-            # Not used in this function, but passed to parameters
-            #hydro = self._get_info_attributes("HydroScheme")
-            #subgrid = self._get_info_attributes("SubgridScheme")
-            swift = True
+            if hvals["Code"].decode("utf-8") == "SWIFT":
+                parameters = self._get_info_attributes("Parameters")
+                swift = True
         except:
             pass
+
+        try:
+            units_test = self._get_info_attributes("Units")
+            save_test = units_test["MsolUnit"]
+            cosmology_hdr = self._get_info_attributes("Cosmology")
+            pkdgrav = True            
+        except:
+            pass
+
+        if swift or pkdgrav:
+            assert swift != pkdgrav
 
         # Rennehan
         if swift:
             only_on_root(mylog.info, "SwiftDataset!")
             self.dimensionality = int(hvals["Dimension"])
+        elif pkdgrav:
+            only_on_root(mylog.info, "PkdgravDataset!")
+            self.dimensionality = 3
         else:
-            only_on_root(mylog.info, "Not SwiftDataset!")
             self.dimensionality = 3
 
         self.refine_by = 2
@@ -399,6 +409,9 @@ class GadgetDataset(SPHDataset):
         if swift:
             self.domain_right_edge = np.asarray(hvals["BoxSize"])
             self.domain_left_edge = np.zeros_like(self.domain_right_edge)
+        elif pkdgrav:
+            self.domain_right_edge = np.array([0.5, 0.5, 0.5])
+            self.domain_left_edge = np.array([-0.5, -0.5, -0.5])
         else:
         # We may have an overridden bounding box.
             if self.domain_left_edge is None and hvals["BoxSize"] != 0:
@@ -426,6 +439,10 @@ class GadgetDataset(SPHDataset):
             self.omega_matter += float(parameters["Cosmology:Omega_b"])
             # This is "little h"
             self.hubble_constant = float(parameters["Cosmology:h"])
+        elif pkdgrav:
+            self.omega_lambda = float(cosmology_hdr["Omega_lambda"])
+            self.omega_matter = float(cosmology_hdr["Omega_m"])
+            self.hubble_constant = float(cosmology_hdr["HubbleParam"])
         else:
             try:
                 self.omega_lambda = hvals["OmegaLambda"]
@@ -497,13 +514,34 @@ class GadgetDataset(SPHDataset):
         # If no units passed in by user, set a sane default (Gadget-2 users
         # guide).
 
+        hvals = self._get_info_attributes("Header")
         # Rennehan
         swift = False
+        pkdgrav = False
+        try:
+            if hvals["Code"].decode("utf-8") == "SWIFT":
+                parameters = self._get_info_attributes("Parameters")
+                swift = True
+        except:
+            pass
+
+        try:
+            units_test = self._get_info_attributes("Units")
+            save_test = units_test["MsolUnit"]
+            cosmology_hdr = self._get_info_attributes("Cosmology")
+            pkdgrav = True
+        except:
+            pass
+
+        if swift or pkdgrav:
+            assert swift != pkdgrav
+
         try:
             units = self._get_info_attributes("Units")
-            swift = True
         except Exception as e:
-            only_on_root(mylog.info, "No SwiftDataset units!")
+            pkdgrav = False
+            swift = False
+            only_on_root(mylog.info, "No SwiftDataset or Pkdgrav units!")
 
         if swift:
             if self.cosmological_simulation == 1:
@@ -533,6 +571,25 @@ class GadgetDataset(SPHDataset):
             # a**(3.0 * (1.0 - gamma))
             # 3.0 * (1.0 - 5.0/3.0) = 3.0 * (-2.0 / 3.0) = -2.0
             self.specific_energy_unit = self.velocity_unit**2.0
+
+            return
+        elif pkdgrav:
+            if self.cosmological_simulation == 1:
+                msg = "Assuming length units are in comoving kpc"
+                only_on_root(mylog.info, msg)
+                self.length_unit = self.quan(
+                    float(units["KpcUnit"]), "kpccm"
+                )
+            else:
+                msg = "Assuming length units are in physical kpc"
+                only_on_root(mylog.info, msg)
+                self.length_unit = self.quan(float(units["KpcUnit"]), "kpc")
+
+            self.mass_unit = self.quan(float(units["MsolUnit"]), "Msun")
+            self.time_unit = self.quan(float(units["SecUnit"]), "s")
+            self.velocity_unit = self.quan(float(units["KmPerSecUnit"]), "km * s**-1 * a**-1")
+            self.temperature_unit = self.quan(1.0, "K")
+            self.specific_energy_unit = self.quan(float(units["ErgPerGmUnit"]), "erg/g")
 
             return
 

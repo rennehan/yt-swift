@@ -140,7 +140,6 @@ class GadgetFieldInfo(SPHFieldInfo):
 
     def setup_gas_particle_fields(self, ptype):
         if (ptype, "Temperature") not in self.ds.field_list:
-
             if (ptype, "ElectronAbundance") in self.ds.field_list:
 
                 def _temperature(field, data):
@@ -150,10 +149,8 @@ class GadgetFieldInfo(SPHFieldInfo):
                     a_e = data[ptype, "ElectronAbundance"]
                     mu = 4.0 / (3.0 * x_H + 1.0 + 4.0 * x_H * a_e)
                     ret = data[ptype, "InternalEnergy"] * (gamma - 1) * mu * mp / kb
-                    return ret.in_units(self.ds.unit_system["temperature"])
 
             else:
-
                 def _temperature(field, data):
                     gamma = 5.0 / 3.0
                     # Rennehan
@@ -162,7 +159,7 @@ class GadgetFieldInfo(SPHFieldInfo):
                             data[ptype, "InternalEnergy"]
                             * (gamma - 1)
                             * data.ds.mu
-                            * mp
+                            * mp     
                             / kb
                         )
                     except:
@@ -171,8 +168,9 @@ class GadgetFieldInfo(SPHFieldInfo):
                             * (gamma - 1)
                             * data.ds.mu
                             * mp
-                            / kb
-                        )
+                            / kb    
+                        )       
+
                     return ret.in_units(self.ds.unit_system["temperature"])
 
             self.add_field(

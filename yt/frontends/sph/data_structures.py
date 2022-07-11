@@ -12,7 +12,7 @@ class SPHDataset(ParticleDataset):
     _sph_smoothing_styles = ["scatter", "gather"]
     _sph_smoothing_style = "scatter"
     _num_neighbors = 32
-    _use_sph_normalization = True
+    _use_sph_normalization = False
 
     def __init__(
         self,
