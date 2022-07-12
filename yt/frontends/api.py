@@ -39,6 +39,7 @@ _frontends = [
     "sdf",
     "stream",
     "swift",
+    "pkdgrav",
     "tipsy",
     "ytdata",
 ]
