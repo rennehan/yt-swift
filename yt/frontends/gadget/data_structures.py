@@ -507,8 +507,9 @@ class GadgetDataset(SPHDataset):
         try:
             units = self._get_info_attributes("Units")
         except Exception as e:
+            if swift:
+                only_on_root(mylog.info, "No SwiftDataset units!")
             swift = False
-            only_on_root(mylog.info, "No SwiftDataset units!")
 
         if swift:
             if self.cosmological_simulation == 1:
