@@ -33,6 +33,7 @@ class SwiftFieldInfo(GadgetFieldInfo):
         ("Potential", ("code_velocity**2", ["gravitational_potential"], None)),
         ("StarFormationRate", ("code_mass / code_time", [], None)),
         ("StarFormationRates", ("code_mass / code_time", [], None)),
+        ("SubgridMasses", ("code_mass", ["particle_mass"], None)),
         ("FormationTime", ("code_time", ["creation_time"], None)),
         ("StellarFormationTime", ("code_time", ["creation_time"], None)),
         ("Metallicity_00", ("", ["metallicity"], None)),
