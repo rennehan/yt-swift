@@ -4,8 +4,9 @@ import tempfile
 from unittest import TestCase
 
 import numpy as np
+from numpy.testing import assert_almost_equal, assert_equal
 
-from yt.testing import assert_almost_equal, assert_equal, fake_random_ds
+from yt.testing import fake_random_ds
 
 
 def setup():
@@ -24,6 +25,11 @@ def test_flux_calculation():
     )
     assert_almost_equal(flux.value, 1.0, 12)
     assert_equal(str(flux.units), "cm**2")
+    flux2 = surf.calculate_flux(
+        ("index", "ones"), ("index", "zeros"), ("index", "zeros")
+    )
+    assert_almost_equal(flux2.value, 1.0, 12)
+    assert_equal(str(flux2.units), "cm**2")
 
 
 def test_sampling():

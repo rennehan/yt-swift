@@ -1,5 +1,6 @@
 import json
 import time
+from functools import cached_property
 
 import numpy as np
 
@@ -42,6 +43,10 @@ class HTTPStreamDataset(ParticleDataset):
     def __str__(self):
         return self.base_url
 
+    @cached_property
+    def unique_identifier(self) -> str:
+        return str(self.parameters.get("unique_identifier", time.time()))
+
     def _parse_parameter_file(self):
         self.dimensionality = 3
         self.refine_by = 2
@@ -64,7 +69,6 @@ class HTTPStreamDataset(ParticleDataset):
         self._periodicity = (True, True, True)
 
         self.current_time = header["current_time"]
-        self.unique_identifier = header.get("unique_identifier", time.time())
         self.cosmological_simulation = int(header["cosmological_simulation"])
         for attr in (
             "current_redshift",

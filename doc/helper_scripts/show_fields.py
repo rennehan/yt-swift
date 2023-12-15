@@ -7,6 +7,7 @@ from yt.config import ytcfg
 from yt.fields.derived_field import NullFunc
 from yt.frontends.api import _frontends
 from yt.frontends.stream.fields import StreamFieldInfo
+from yt.funcs import obj_length
 from yt.testing import fake_random_ds
 from yt.units import dimensions
 from yt.units.yt_array import Unit
@@ -36,7 +37,7 @@ def _strip_ftype(field):
 
 
 np.random.seed(int(0x4D3D3D3))
-units = [base_ds._get_field_info(*f).units for f in fields]
+units = [base_ds._get_field_info(f).units for f in fields]
 fields = [_strip_ftype(f) for f in fields]
 ds = fake_random_ds(16, fields=fields, units=units, particles=1)
 ds.parameters["HydroMethod"] = "streaming"
@@ -145,7 +146,7 @@ def print_all_fields(fl):
         print(s)
         print("^" * len(s))
         print()
-        if len(df.units) > 0:
+        if obj_length(df.units) > 0:
             # Most universal fields are in CGS except for these special fields
             if df.name[1] in [
                 "particle_position",

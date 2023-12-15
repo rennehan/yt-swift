@@ -230,6 +230,17 @@ AMReX/Boxlib
    ~yt.frontends.boxlib.io.IOHandlerBoxlib
    ~yt.frontends.boxlib.io.IOHandlerOrion
 
+CfRadial
+^^^^^^^^
+
+.. autosummary::
+
+   ~yt.frontends.cf_radial.data_structures.CFRadialGrid
+   ~yt.frontends.cf_radial.data_structures.CFRadialHierarchy
+   ~yt.frontends.cf_radial.data_structures.CFRadialDataset
+   ~yt.frontends.cf_radial.fields.CFRadialFieldInfo
+   ~yt.frontends.cf_radial.io.CFRadialIOHandler
+
 Chombo
 ^^^^^^
 
@@ -443,7 +454,6 @@ Loading Data
 .. autosummary::
 
    ~yt.loaders.load
-   ~yt.loaders.simulation
    ~yt.loaders.load_uniform_grid
    ~yt.loaders.load_amr_grids
    ~yt.loaders.load_particles
@@ -524,7 +534,6 @@ Field Functions
    ~yt.data_objects.static_output.Dataset.add_field
    ~yt.data_objects.static_output.Dataset.add_deposited_particle_field
    ~yt.data_objects.static_output.Dataset.add_mesh_sampling_particle_field
-   ~yt.data_objects.static_output.Dataset.add_smoothed_particle_field
    ~yt.data_objects.static_output.Dataset.add_gradient_fields
    ~yt.frontends.stream.data_structures.StreamParticlesDataset.add_sph_fields
 
@@ -815,7 +824,10 @@ Cosmology Calculator
 Testing Infrastructure
 ----------------------
 
-The first set of functions are all provided by NumPy.
+The core set of testing functions are re-exported from NumPy,
+and are deprecated (prefer using
+`numpy.testing <https://numpy.org/doc/stable/reference/routines.testing.html>`_
+directly).
 
 .. autosummary::
 
@@ -830,14 +842,28 @@ The first set of functions are all provided by NumPy.
    ~yt.testing.assert_allclose
    ~yt.testing.assert_raises
 
-These are yt-provided functions:
+`unyt.testing <https://unyt.readthedocs.io/en/stable/modules/unyt.testing.html>`_
+also provides some specialized functions for comparing arrays in a units-aware
+fashion.
+
+Finally, yt provides the following functions:
 
 .. autosummary::
 
    ~yt.testing.assert_rel_equal
    ~yt.testing.amrspace
-   ~yt.testing.fake_random_ds
    ~yt.testing.expand_keywords
+   ~yt.testing.fake_random_ds
+   ~yt.testing.fake_amr_ds
+   ~yt.testing.fake_particle_ds
+   ~yt.testing.fake_tetrahedral_ds
+   ~yt.testing.fake_hexahedral_ds
+   ~yt.testing.small_fake_hexahedral_ds
+   ~yt.testing.fake_stretched_ds
+   ~yt.testing.fake_vr_orientation_test_ds
+   ~yt.testing.fake_sph_orientation_ds
+   ~yt.testing.fake_sph_grid_ds
+   ~yt.testing.fake_octree_ds
 
 These are for the pytest infrastructure:
 

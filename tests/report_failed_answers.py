@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import shutil
+import sys
 import tempfile
 import xml.etree.ElementTree as ET
 
@@ -332,7 +333,7 @@ def parse_nose_xml(nose_xml):
 
     """
     missing_answers = set()
-    failed_answers = collections.defaultdict(lambda: dict())
+    failed_answers = collections.defaultdict(lambda: {})
     missing_errors = ["No such file or directory", "There is no old answer available"]
     tree = ET.parse(nose_xml)
     testsuite = tree.getroot()
@@ -425,6 +426,9 @@ if __name__ == "__main__":
                 + "\n"
             )
         response = upload_answers(failed_answers)
+        if response is None:
+            log.error("Failed to upload answers for failed tests !")
+            sys.exit(1)
         if response.ok:
             msg += (
                 FLAG_EMOJI
@@ -438,6 +442,9 @@ if __name__ == "__main__":
 
     if args.upload_missing_answers and missing_answers:
         response = upload_answers(missing_answers)
+        if response is None:
+            log.error("Failed to upload missing answers !")
+            sys.exit(1)
         if response.ok:
             msg = (
                 FLAG_EMOJI

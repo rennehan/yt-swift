@@ -9,11 +9,10 @@ Oct definitions file
 
 cimport cython
 cimport numpy as np
-cimport oct_visitors
-cimport selection_routines
 from libc.math cimport floor
 from libc.stdlib cimport bsearch, free, malloc, qsort, realloc
 
+from yt.geometry cimport oct_visitors, selection_routines
 from yt.utilities.lib.allocation_container cimport AllocationContainer, ObjectPool
 from yt.utilities.lib.fp_utils cimport *
 
@@ -58,7 +57,7 @@ cdef class OctreeContainer:
     cdef int partial_coverage
     cdef int level_offset
     cdef int nn[3]
-    cdef np.uint8_t oref
+    cdef np.uint8_t nz
     cdef np.float64_t DLE[3]
     cdef np.float64_t DRE[3]
     cdef public np.int64_t nocts
@@ -81,6 +80,7 @@ cdef class OctreeContainer:
     # The fill_style is the ordering, C or F, of the octs in the file.  "o"
     # corresponds to C, and "r" is for Fortran.
     cdef public object fill_style
+    cdef public int max_level
 
 cdef class SparseOctreeContainer(OctreeContainer):
     cdef OctKey *root_nodes

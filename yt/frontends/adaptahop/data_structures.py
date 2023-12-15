@@ -9,7 +9,6 @@ Data structures for AdaptaHOP frontend.
 
 import os
 import re
-import stat
 from itertools import product
 from typing import Optional
 
@@ -66,13 +65,13 @@ class AdaptaHOPDataset(Dataset):
         filename,
         dataset_type="adaptahop_binary",
         n_ref=16,
-        over_refine_factor=1,
+        num_zones=2,
         units_override=None,
         unit_system="cgs",
         parent_ds=None,
     ):
         self.n_ref = n_ref
-        self.over_refine_factor = over_refine_factor
+        self.num_zones = num_zones
         if parent_ds is None:
             raise RuntimeError(
                 "The AdaptaHOP frontend requires a parent dataset "
@@ -141,11 +140,10 @@ class AdaptaHOPDataset(Dataset):
         with FortranFile(self.parameter_filename) as fpu:
             params = fpu.read_attrs(self._header_attributes)
         self.dimensionality = 3
-        self.unique_identifier = int(os.stat(self.parameter_filename)[stat.ST_CTIME])
         # Domain related things
         self.filename_template = self.parameter_filename
         self.file_count = 1
-        nz = 1 << self.over_refine_factor
+        nz = self.num_zones
         self.domain_dimensions = np.ones(3, "int32") * nz
 
         # Set things up
@@ -278,8 +276,7 @@ class AdaptaHOPHaloContainer(YTSelectionContainer):
     def __init__(self, ptype, particle_identifier, parent_ds, halo_ds):
         if ptype not in parent_ds.particle_types_raw:
             raise RuntimeError(
-                'Possible halo types are %s, supplied "%s".'
-                % (parent_ds.particle_types_raw, ptype)
+                f'Possible halo types are {parent_ds.particle_types_raw}, supplied "{ptype}".'
             )
 
         # Setup required fields
@@ -352,7 +349,7 @@ class AdaptaHOPHaloContainer(YTSelectionContainer):
         # Build subregion that only contains halo particles
         reg = sph.cut_region(
             ['np.in1d(obj[("io", "particle_identity")].astype(int), members)'],
-            locals=dict(members=members, np=np),
+            locals={"members": members, "np": np},
         )
 
         self.sphere = sph

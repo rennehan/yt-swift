@@ -1,10 +1,10 @@
 import numpy as np
+from numpy.testing import assert_equal
 
 from yt.frontends.athena.api import AthenaDataset
 from yt.loaders import load
 from yt.testing import (
     assert_allclose_units,
-    assert_equal,
     disable_dataset_cache,
     requires_file,
 )
@@ -14,7 +14,11 @@ from yt.utilities.answer_testing.framework import (
     small_patch_amr,
 )
 
-_fields_cloud = (("athena", "scalar[0]"), ("gas", "density"), ("gas", "total_energy"))
+_fields_cloud = (
+    ("athena", "scalar[0]"),
+    ("gas", "density"),
+    ("gas", "total_energy_density"),
+)
 
 cloud = "ShockCloud/id0/Cloud.0050.vtk"
 

@@ -5,6 +5,7 @@ A proxy object for field descriptors, usually living as ds.fields.
 import inspect
 import textwrap
 import weakref
+from functools import cached_property
 
 from yt.fields.derived_field import DerivedField
 
@@ -36,13 +37,9 @@ class FieldTypeContainer:
             return self.__getattribute__(attr)
         return fnc
 
-    _field_types = None
-
-    @property
+    @cached_property
     def field_types(self):
-        if self._field_types is None:
-            self._field_types = {t for t, n in self.ds.field_info}
-        return self._field_types
+        return {t for t, n in self.ds.field_info}
 
     def __dir__(self):
         return list(self.field_types)

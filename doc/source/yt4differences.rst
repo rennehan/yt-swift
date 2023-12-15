@@ -77,7 +77,7 @@ The list below is arranged in order of most to least important changes.
   energy per unit mass, and ``("gas", "momentum_density_x")`` for the x-axis
   component of momentum density. See :ref:`efields` for more information.
 * **Deprecated field names**
-  Certain field names are deprecated within yt v4.0 and will be removed in
+  Certain field names are deprecated within yt v4.0.x and removed in
   yt v4.1. For example, ``("gas", "kinetic_energy")`` has been renamed to
   ``("gas", "kinetic_energy_density")``, though the former name has been added
   as an alias. Other fields, such as
@@ -150,7 +150,7 @@ removed in yt 4.1
  * the ``limits`` argument from :meth:`~yt.visualization.image_writer.write_projection` is deprecated in
    favor to ``vmin`` and ``vmax``
  * :meth:`~yt.visualization.plot_container.ImagePlotContainer.set_cbar_minorticks` is a deprecated alias for :meth:`~yt.visualization.plot_container.ImagePlotContainer.set_colorbar_minorticks`
- * the ``axis`` argument from :meth:`yt.visualization.plot_window.SlicePlot` is a depreacted alias for the ``normal`` argument
+ * the ``axis`` argument from :meth:`yt.visualization.plot_window.SlicePlot` is a deprecated alias for the ``normal`` argument
  * the old configuration file ``ytrc`` is deprecated in favor of the new ``yt.toml`` format. In yt 4.0,
    you'll get a warning every time you import yt if you're still using the old configuration file,
    which will instruct you to invoke the yt command line interface to convert automatically to the new format.

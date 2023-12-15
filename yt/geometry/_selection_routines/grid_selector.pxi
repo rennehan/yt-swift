@@ -19,16 +19,16 @@ cdef class GridSelector(SelectorObject):
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
-    def fill_mask(self, gobj):
+    def fill_mask_regular_grid(self, gobj):
         return np.ones(gobj.ActiveDimensions, dtype='bool')
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.cdivision(True)
-    cdef int select_cell(self, np.float64_t pos[3], np.float64_t dds[3]) nogil:
+    cdef int select_cell(self, np.float64_t pos[3], np.float64_t dds[3]) noexcept nogil:
         return 1
 
-    cdef int select_point(self, np.float64_t pos[3]) nogil:
+    cdef int select_point(self, np.float64_t pos[3]) noexcept nogil:
         # we apparently don't check if the point actually lies in the grid..
         return 1
 

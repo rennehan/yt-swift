@@ -1,16 +1,18 @@
 import contextlib
 import inspect
 import re
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 from more_itertools import always_iterable
 
 import yt.units.dimensions as ytdims
 from yt._maintenance.deprecation import issue_deprecation_warning
+from yt._typing import FieldKey
 from yt.funcs import iter_fields, validate_field_key
 from yt.units.unit_object import Unit  # type: ignore
 from yt.utilities.exceptions import YTFieldNotFound
 from yt.utilities.logger import ytLogger as mylog
+from yt.visualization._commons import _get_units_label
 
 from .field_detector import FieldDetector
 from .field_exceptions import (
@@ -41,13 +43,13 @@ def DeprecatedFieldFunc(ret_field, func, since, removal):
         # Only log a warning if we've already done
         # field detection
         if data.ds.fields_detected:
-            args = [field.name, since, removal]
-            msg = (
-                "The Derived Field %s is deprecated as of yt v%s "
-                "and will be removed in yt v%s. "
-            )
+            args = [field.name, since]
+            msg = "The Derived Field %s is deprecated as of yt v%s "
+            if removal is not None:
+                msg += "and will be removed in yt v%s "
+                args.append(removal)
             if ret_field != field.name:
-                msg += "Use %s instead."
+                msg += ", use %s instead"
                 args.append(ret_field)
             mylog.warning(msg, *args)
         return func(field, data)
@@ -109,7 +111,7 @@ class DerivedField:
 
     def __init__(
         self,
-        name: Tuple[str, str],
+        name: FieldKey,
         sampling_type,
         function,
         units: Optional[Union[str, bytes, Unit]] = None,
@@ -124,7 +126,7 @@ class DerivedField:
         ds=None,
         nodal_flag=None,
         *,
-        particle_type=None,
+        alias: Optional["DerivedField"] = None,
     ):
         validate_field_key(name)
         self.name = name
@@ -132,14 +134,6 @@ class DerivedField:
         self.display_name = display_name
         self.not_in_all = not_in_all
         self.display_field = display_field
-        if particle_type is not None:
-            issue_deprecation_warning(
-                "The 'particle_type' keyword argument is deprecated. "
-                "Please use sampling_type='particle' instead.",
-                since="3.2",
-                removal="4.2",
-            )
-            sampling_type = "particle"
         self.sampling_type = sampling_type
         self.vector_field = vector_field
         self.ds = ds
@@ -170,9 +164,8 @@ class DerivedField:
             self.units = units.decode("utf-8")
         else:
             raise FieldUnitsError(
-                "Cannot handle units '%s' (type %s). "
-                "Please provide a string or Unit "
-                "object." % (units, type(units))
+                f"Cannot handle units {units!r} (type {type(units)}). "
+                "Please provide a string or Unit object."
             )
         if output_units is None:
             output_units = self.units
@@ -181,6 +174,12 @@ class DerivedField:
         if isinstance(dimensions, str):
             dimensions = getattr(ytdims, dimensions)
         self.dimensions = dimensions
+
+        if alias is None:
+            self._shared_aliases_list = [self]
+        else:
+            self._shared_aliases_list = alias._shared_aliases_list
+            self._shared_aliases_list.append(self)
 
     def _copy_def(self):
         dd = {}
@@ -200,7 +199,7 @@ class DerivedField:
         if self.sampling_type == "cell":
             return False
         is_sph_field = False
-        if self.alias_field:
+        if self.is_alias:
             name = self.alias_name
         else:
             name = self.name
@@ -315,37 +314,42 @@ class DerivedField:
                 units = Unit(self.units)
         # Add unit label
         if not units.is_dimensionless:
-            data_label += r"\ \ \left(%s\right)" % (units.latex_representation())
+            data_label += _get_units_label(units.latex_representation()).strip("$")
 
         data_label += r"$"
         return data_label
 
     @property
-    def alias_field(self):
-        if getattr(self._function, "__name__", None) == "_TranslationFunc":
-            return True
-        return False
+    def alias_field(self) -> bool:
+        issue_deprecation_warning(
+            "DerivedField.alias_field is a deprecated equivalent to DerivedField.is_alias ",
+            since="4.1.0",
+        )
+        return self.is_alias
 
     @property
-    def alias_name(self):
-        if self.alias_field:
-            return self._function.alias_name
+    def is_alias(self) -> bool:
+        return self._shared_aliases_list.index(self) > 0
+
+    def is_alias_to(self, other: "DerivedField") -> bool:
+        return self._shared_aliases_list is other._shared_aliases_list
+
+    @property
+    def alias_name(self) -> Optional[FieldKey]:
+        if self.is_alias:
+            return self._shared_aliases_list[0].name
         return None
 
     def __repr__(self):
         if self._function is NullFunc:
             s = "On-Disk Field "
-        elif getattr(self._function, "__name__", None) == "_TranslationFunc":
-            s = f'Alias Field for "{self.alias_name}" '
+        elif self.is_alias:
+            s = f"Alias Field for {self.alias_name!r} "
         else:
             s = "Derived Field "
-        if isinstance(self.name, tuple):
-            s += "(%s, %s): " % self.name
-        else:
-            s += f"{self.name}: "
-        s += f"(units: {self.units}"
+        s += f"{self.name!r}: (units: {self.units!r}"
         if self.display_name is not None:
-            s += f", display_name: '{self.display_name}'"
+            s += f", display_name: {self.display_name!r}"
         if self.sampling_type == "particle":
             s += ", particle field"
         s += ")"
@@ -390,7 +394,6 @@ class DerivedField:
         p = re.compile("_p[0-9]+_")
         m = p.search(self.name[1])
         if m is not None:
-
             # Find the ionization state
             pstr = m.string[m.start() + 1 : m.end() - 1]
             segments = self.name[1].split("_")
@@ -462,6 +465,26 @@ class DerivedField:
             label = label.replace(" ", r"\ ")
             label = r"$\rm{" + label + r"}$"
         return label
+
+    def __copy__(self):
+        # a shallow copy doesn't copy the _shared_alias_list attr
+        # This method is implemented in support to ParticleFilter.wrap_func
+        return type(self)(
+            name=self.name,
+            sampling_type=self.sampling_type,
+            function=self._function,
+            units=self.units,
+            take_log=self.take_log,
+            validators=self.validators,
+            vector_field=self.vector_field,
+            display_field=self.display_field,
+            not_in_all=self.not_in_all,
+            display_name=self.display_name,
+            output_units=self.output_units,
+            dimensions=self.dimensions,
+            ds=self.ds,
+            nodal_flag=self.nodal_flag,
+        )
 
 
 class FieldValidator:

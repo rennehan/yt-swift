@@ -1,24 +1,25 @@
 import weakref
+from functools import cached_property
 
 from yt.funcs import obj_length
 from yt.units.yt_array import YTQuantity
-from yt.utilities.exceptions import YTDimensionalityError, YTFieldNotParseable
+from yt.utilities.exceptions import (
+    YTDimensionalityError,
+    YTFieldNotFound,
+    YTFieldNotParseable,
+)
 from yt.visualization.line_plot import LineBuffer
 
 from .data_containers import _get_ipython_key_completion
 
 
 class RegionExpression:
-    _all_data = None
-
     def __init__(self, ds):
         self.ds = weakref.proxy(ds)
 
-    @property
+    @cached_property
     def all_data(self):
-        if self._all_data is None:
-            self._all_data = self.ds.all_data()
-        return self._all_data
+        return self.ds.all_data()
 
     def __getitem__(self, item):
         # At first, we will only implement this as accepting a slice that is
@@ -26,7 +27,11 @@ class RegionExpression:
         # that result in a rectangular prism or a slice.
         try:
             return self.all_data[item]
-        except (TypeError, YTFieldNotParseable):
+        except (YTFieldNotParseable, YTFieldNotFound):
+            # any error raised by self.ds._get_field_info
+            # signals a type error (not a field), however we don't want to
+            # catch plain TypeErrors as this may create subtle bugs very hard
+            # to decipher, like broken internal function calls.
             pass
 
         if isinstance(item, slice):

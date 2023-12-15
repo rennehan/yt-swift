@@ -1,13 +1,18 @@
 import os
+import sys
 import warnings
+from pathlib import Path
 from typing import Callable, List
 
-# TODO: import tomllib from the standard library instead in Python >= 3.11
-import tomli as tomllib
 import tomli_w
 from more_itertools import always_iterable
 
 from yt.utilities.configuration_tree import ConfigLeaf, ConfigNode
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 configuration_callbacks: List[Callable[["YTConfig"], None]] = []
 
@@ -89,7 +94,8 @@ class YTConfig:
                     data = tomllib.load(fh)
             except tomllib.TOMLDecodeError as exc:
                 warnings.warn(
-                    f"Could not load configuration file {fname} (invalid TOML: {exc})"
+                    f"Could not load configuration file {fname} (invalid TOML: {exc})",
+                    stacklevel=2,
                 )
             else:
                 self.update(data, metadata=metadata)
@@ -102,12 +108,21 @@ class YTConfig:
         config_as_str = tomli_w.dumps(value)
 
         try:
-            # Assuming file_handler has a write attribute
+            file_path = Path(file_handler)
+        except TypeError:
+            if not hasattr(file_handler, "write"):
+                raise TypeError(
+                    f"Expected a path to a file, or a writable object, got {file_handler}"
+                ) from None
             file_handler.write(config_as_str)
-        except AttributeError:
-            # Otherwise we expect a path to a file
-            with open(file_handler, mode="w") as fh:
-                fh.write(config_as_str)
+        else:
+            pdir = file_path.parent
+            if not pdir.exists():
+                warnings.warn(
+                    f"{pdir!s} does not exist, creating it (recursively)", stacklevel=2
+                )
+                os.makedirs(pdir)
+            file_path.write_text(config_as_str)
 
     @staticmethod
     def get_global_config_file():
@@ -115,6 +130,14 @@ class YTConfig:
 
     @staticmethod
     def get_local_config_file():
+        path = Path.cwd()
+        while path.parent is not path:
+            candidate = path.joinpath("yt.toml")
+            if candidate.is_file():
+                return os.path.abspath(candidate)
+            else:
+                path = path.parent
+
         return os.path.join(os.path.abspath(os.curdir), "yt.toml")
 
     def __setitem__(self, args, value):
@@ -138,9 +161,9 @@ CONFIG = YTConfig()
 
 
 def _cast_bool_helper(value):
-    if value == "True":
+    if value in ("true", "True", True):
         return True
-    elif value == "False":
+    elif value in ("false", "False", False):
         return False
     else:
         raise ValueError("Cannot safely cast to bool")

@@ -1,12 +1,14 @@
 import abc
 import os
 import weakref
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
+from yt._maintenance.deprecation import issue_deprecation_warning
 from yt.config import ytcfg
-from yt.units.yt_array import YTArray, uconcatenate  # type: ignore
+from yt.units._numpy_wrapper_functions import uconcatenate
+from yt.units.yt_array import YTArray
 from yt.utilities.exceptions import YTFieldNotFound
 from yt.utilities.io_handler import io_registry
 from yt.utilities.logger import ytLogger as mylog
@@ -47,6 +49,19 @@ class Index(ParallelAnalysisInterface, abc.ABC):
     @abc.abstractmethod
     def _detect_output_fields(self):
         pass
+
+    def _icoords_to_fcoords(
+        self,
+        icoords: np.ndarray,
+        ires: np.ndarray,
+        axes: Optional[Tuple[int, ...]] = None,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        # What's the use of raising NotImplementedError for this, when it's an
+        # abstract base class?  Well, only *some* of the subclasses have it --
+        # and for those that *don't*, we should not be calling it -- and since
+        # it's a semi-private method, it shouldn't be called outside of yt
+        # machinery.  So we shouldn't ever get here!
+        raise NotImplementedError
 
     def _initialize_state_variables(self):
         self._parallel_locking = False
@@ -314,7 +329,7 @@ class YTDataChunk:
             c = obj.select_fcoords(self.dobj)
             if c.shape[0] == 0:
                 continue
-            ci[ind : ind + c.shape[0], :] = c
+            ci.d[ind : ind + c.shape[0], :] = c
             ind += c.shape[0]
         return ci
 
@@ -350,7 +365,8 @@ class YTDataChunk:
             c = obj.select_fwidth(self.dobj)
             if c.shape[0] == 0:
                 continue
-            ci[ind : ind + c.shape[0], :] = c
+            ci.d[ind : ind + c.shape[0], :] = c
+
             ind += c.shape[0]
         return ci
 
@@ -406,7 +422,7 @@ class YTDataChunk:
             c = obj.select_fcoords_vertex(self.dobj)
             if c.shape[0] == 0:
                 continue
-            ci[ind : ind + c.shape[0], :, :] = c
+            ci.d[ind : ind + c.shape[0], :, :] = c
             ind += c.shape[0]
         return ci
 
@@ -449,6 +465,15 @@ class ChunkDataCache:
 
 def is_curvilinear(geo):
     # tell geometry is curvilinear or not
+    issue_deprecation_warning(
+        "the is_curvilear() function is deprecated. "
+        "Instead, compare the geometry object directly with yt.geometry.geometry_enum.Geometry "
+        "enum members, as for instance:\n"
+        "if is_curvilinear(geometry):\n    ...\n"
+        "should be rewritten as:"
+        "if geometry is Geometry.POLAR or geometry is Geometry.CYLINDRICAL or geometry is Geometry.SPHERICAL:\n    ...",
+        since="4.2",
+    )
     if geo in ["polar", "cylindrical", "spherical"]:
         return True
     else:

@@ -72,7 +72,6 @@ class Tree:
         max_level=None,
         data_source=None,
     ):
-
         self.ds = ds
         try:
             self._id_offset = ds.index.grids[0]._id_offset
@@ -171,7 +170,6 @@ class AMRKDTree(ParallelAnalysisInterface):
     no_ghost = True
 
     def __init__(self, ds, min_level=None, max_level=None, data_source=None):
-
         if not issubclass(ds.index.__class__, GridIndex):
             raise RuntimeError(
                 "AMRKDTree does not support particle or octree-based data."
@@ -344,7 +342,7 @@ class AMRKDTree(ParallelAnalysisInterface):
             for i, field in enumerate(self.fields):
                 if self.log_fields[i]:
                     v = vcd[field].astype("float64")
-                    v[v < 0] = np.nan
+                    v[v <= 0] = np.nan
                     dds.append(np.log10(v))
                 else:
                     dds.append(vcd[field].astype("float64"))
@@ -354,7 +352,7 @@ class AMRKDTree(ParallelAnalysisInterface):
         if self.data_source.selector is None:
             mask = np.ones(dims, dtype="uint8")
         else:
-            mask = self.data_source.selector.fill_mask(grid)[
+            mask = self.data_source.selector.fill_mask_regular_grid(grid)[
                 li[0] : ri[0], li[1] : ri[1], li[2] : ri[2]
             ].astype("uint8")
 

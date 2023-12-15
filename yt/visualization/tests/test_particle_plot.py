@@ -5,16 +5,12 @@ import unittest
 from unittest import mock
 
 import numpy as np
+from numpy.testing import assert_allclose, assert_array_almost_equal
 
 from yt.data_objects.particle_filters import add_particle_filter
 from yt.data_objects.profiles import create_profile
 from yt.loaders import load
-from yt.testing import (
-    assert_allclose,
-    assert_array_almost_equal,
-    fake_particle_ds,
-    requires_file,
-)
+from yt.testing import fake_particle_ds, requires_file
 from yt.units.yt_array import YTArray
 from yt.utilities.answer_testing.framework import (
     PhasePlotAttributeTest,
@@ -42,7 +38,7 @@ PROJ_ATTR_ARGS["set_cmap"] = [
 PROJ_ATTR_ARGS["set_log"] = [((("all", "particle_mass"), False), {})]
 PROJ_ATTR_ARGS["set_zlim"] = [
     ((("all", "particle_mass"), 1e39, 1e42), {}),
-    ((("all", "particle_mass"), 1e39, None), {"dynamic_range": 4}),
+    ((("all", "particle_mass"),), {"zmin": 1e39, "dynamic_range": 4}),
 ]
 
 PHASE_ATTR_ARGS = {
@@ -124,6 +120,27 @@ def test_particle_projection_answers():
 
 
 @requires_ds(g30, big_data=True)
+def test_particle_offaxis_projection_answers():
+    plot_field = ("all", "particle_mass")
+    decimals = 12
+    ds = data_dir_load(g30)
+    attr_name = "set_cmap"
+    attr_args = ((("all", "particle_mass"), "RdBu"), {})
+    L = [1, 1, 1]
+    test = PlotWindowAttributeTest(
+        ds,
+        plot_field,
+        L,
+        attr_name,
+        attr_args,
+        decimals,
+        "ParticleProjectionPlot",
+    )
+    test_particle_offaxis_projection_answers.__name__ = test.description
+    yield test
+
+
+@requires_ds(g30, big_data=True)
 def test_particle_projection_filter():
     """
 
@@ -150,12 +167,17 @@ def test_particle_projection_filter():
     ds.add_particle_filter("formed_star")
     for ax in "xyz":
         attr_name = "set_log"
-        for args in PROJ_ATTR_ARGS[attr_name]:
-            test = PlotWindowAttributeTest(
-                ds, plot_field, ax, attr_name, args, decimals, "ParticleProjectionPlot"
-            )
-            test_particle_projection_filter.__name__ = test.description
-            yield test
+        test = PlotWindowAttributeTest(
+            ds,
+            plot_field,
+            ax,
+            attr_name,
+            ((plot_field, False), {}),
+            decimals,
+            "ParticleProjectionPlot",
+        )
+        test_particle_projection_filter.__name__ = test.description
+        yield test
 
 
 @requires_ds(g30, big_data=True)
@@ -408,6 +430,24 @@ class TestParticleProjectionPlotSave(unittest.TestCase):
                     "yt.visualization._mpl_imports.FigureCanvasAgg.print_figure"
                 ):
                     pplot_wf.save()
+
+    def test_particle_plot_offaxis(self):
+        test_ds = fake_particle_ds()
+        Ls = [[1, 1, 1], [0, 1, -0.5]]
+        Ns = [None, [1, 1, 1]]
+        for L, N in zip(Ls, Ns):
+            for weight_field in WEIGHT_FIELDS:
+                pplot_off = ParticleProjectionPlot(
+                    test_ds,
+                    L,
+                    ("all", "particle_mass"),
+                    north_vector=N,
+                    weight_field=weight_field,
+                )
+                with mock.patch(
+                    "yt.visualization._mpl_imports.FigureCanvasAgg.print_figure"
+                ):
+                    pplot_off.save()
 
     def test_creation_with_width(self):
         test_ds = fake_particle_ds()

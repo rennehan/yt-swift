@@ -1,7 +1,11 @@
 from functools import partial
 
 import pytest
+import unyt
 
+import yt
+from yt import derived_field
+from yt.fields import local_fields
 from yt.testing import fake_random_ds
 
 
@@ -53,9 +57,7 @@ def test_add_field_uncallable():
     class Spam:
         pass
 
-    with pytest.raises(
-        TypeError, match=r"Expected a callable object, got .* with type .*"
-    ):
+    with pytest.raises(TypeError, match=r"(is not a callable object)$"):
         ds.add_field(("bacon", "spam"), Spam(), sampling_type="cell")
 
 
@@ -93,3 +95,51 @@ def test_add_field_keyword_only():
             _spam,
             sampling_type="cell",
         )
+
+
+def test_derived_field(monkeypatch):
+    tmp_field_info = local_fields.LocalFieldInfoContainer(None, [], None)
+    monkeypatch.setattr(local_fields, "local_fields", tmp_field_info)
+
+    @derived_field(name="pressure", sampling_type="cell", units="dyne/cm**2")
+    def _pressure(field, data):
+        return (
+            (data.ds.gamma - 1.0)
+            * data["gas", "density"]
+            * data["gas", "specific_thermal_energy"]
+        )
+
+
+@pytest.mark.parametrize(
+    "add_field_kwargs",
+    [
+        # full default: auto unit detection, no (in)validation
+        {},
+        # explicit "auto", should be identical to default behaviour
+        {"units": "auto"},
+        # explicitly requesting dimensionless units
+        {"units": "dimensionless"},
+        # explicitly requesting dimensionless units (short hand)
+        {"units": ""},
+        # explictly requesting no dimensions
+        {"dimensions": yt.units.dimensionless},
+        # should work with unyt.dimensionless too
+        {"dimensions": unyt.dimensionless},
+        # supported short hand
+        {"dimensions": "dimensionless"},
+    ],
+)
+def test_dimensionless_field(add_field_kwargs):
+    ds = fake_random_ds(16)
+
+    def _dimensionless_field(field, data):
+        return data["gas", "density"] / data["gas", "density"].units
+
+    ds.add_field(
+        name=("gas", "dimensionless_density"),
+        function=_dimensionless_field,
+        sampling_type="local",
+        **add_field_kwargs,
+    )
+    # check access
+    ds.all_data()["gas", "dimensionless_density"]

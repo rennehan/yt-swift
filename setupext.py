@@ -1,5 +1,6 @@
 import contextlib
 import glob
+import logging
 import os
 import platform
 import shutil
@@ -8,17 +9,21 @@ import sys
 import tempfile
 from textwrap import dedent
 from concurrent.futures import ThreadPoolExecutor
-from distutils import log
 from distutils.ccompiler import CCompiler, new_compiler
-from distutils.errors import CompileError, LinkError
 from distutils.sysconfig import customize_compiler
 from subprocess import PIPE, Popen
 from sys import platform as _platform
-
-from pkg_resources import resource_filename
+import ewah_bool_utils
 from setuptools.command.build_ext import build_ext as _build_ext
 from setuptools.command.sdist import sdist as _sdist
+from setuptools.errors import CompileError, LinkError
 
+if sys.version_info >= (3, 9):
+    import importlib.resources as importlib_resources
+else:
+    import importlib_resources
+
+log = logging.getLogger("setupext")
 
 @contextlib.contextmanager
 def stdchannel_redirected(stdchannel, dest_filename):
@@ -114,14 +119,14 @@ def check_for_openmp():
             if len(output) == nthreads:
                 using_openmp = True
             else:
-                log.warn(
+                log.warning(
                     "Unexpected number of lines from output of test "
                     "OpenMP program (output was %s)",
                     output,
                 )
                 using_openmp = False
         else:
-            log.warn(
+            log.warning(
                 "Unexpected output from test OpenMP program (output was %s)", output
             )
             using_openmp = False
@@ -132,9 +137,9 @@ def check_for_openmp():
         os.chdir(start_dir)
 
     if using_openmp:
-        log.warn("Using OpenMP to compile parallel extensions")
+        log.warning("Using OpenMP to compile parallel extensions")
     else:
-        log.warn(
+        log.warning(
             "Unable to compile OpenMP test program so Cython\n"
             "extensions will be compiled without parallel support"
         )
@@ -193,18 +198,25 @@ def check_CPP14_flags(possible_compile_flags):
         if check_CPP14_flag([flags]):
             return flags
 
-    log.warn(
+    log.warning(
         "Your compiler seems to be too old to support C++14. "
         "yt may not be able to compile. Please use a newer version."
     )
     return []
 
+def get_ewah_bool_utils_path():
+    if sys.version_info >= (3, 9):
+        return os.path.abspath(importlib_resources.files("ewah_bool_utils"))
+    else:
+        from pkg_resources import resource_filename
+        return os.path.dirname(os.path.abspath(resource_filename("ewah_bool_utils", "ewah_bool_wrap.pxd")))
 
 def check_for_pyembree(std_libs):
     embree_libs = []
     embree_aliases = {}
+
     try:
-        _ = resource_filename("pyembree", "rtcore.pxd")
+        importlib_resources.files("pyembree")
     except ImportError:
         return embree_libs, embree_aliases
 
@@ -294,18 +306,18 @@ def read_embree_location():
         exit_code = p.returncode
 
         if exit_code != 0:
-            log.warn(
+            log.warning(
                 "Pyembree is installed, but I could not compile Embree test code."
             )
-            log.warn("The error message was: ")
-            log.warn(err)
-            log.warn(fail_msg)
+            log.warning("The error message was: ")
+            log.warning(err)
+            log.warning(fail_msg)
 
         # Clean up
         file.close()
 
     except OSError:
-        log.warn(
+        log.warning(
             "read_embree_location() could not find your C compiler. "
             "Attempted to use '%s'.",
             compiler,
@@ -380,7 +392,7 @@ def create_build_ext(lib_exts, cythonize_aliases):
             self.distribution.ext_modules[:] = cythonize(
                 lib_exts,
                 aliases=cythonize_aliases,
-                compiler_directives={"language_level": 2},
+                compiler_directives={"language_level": 3},
                 nthreads=get_cpu_count(),
             )
             _build_ext.finalize_options(self)
@@ -395,6 +407,7 @@ def create_build_ext(lib_exts, cythonize_aliases):
             import numpy
 
             self.include_dirs.append(numpy.get_include())
+            self.include_dirs.append(ewah_bool_utils.get_include())
 
         def build_extensions(self):
             self.check_extensions_list(self.extensions)
@@ -429,7 +442,7 @@ def create_build_ext(lib_exts, cythonize_aliases):
             cythonize(
                 lib_exts,
                 aliases=cythonize_aliases,
-                compiler_directives={"language_level": 2},
+                compiler_directives={"language_level": 3},
                 nthreads=get_cpu_count(),
             )
             _sdist.run(self)

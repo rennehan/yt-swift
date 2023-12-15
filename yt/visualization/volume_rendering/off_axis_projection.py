@@ -163,7 +163,7 @@ def off_axis_projection(
             else:
                 ptype = item[0]
                 ppos = ["x", "y", "z"]
-        elif fi.alias_field:
+        elif fi.is_alias:
             if fi.alias_name[0] not in sph_ptypes:
                 raise_error = True
             elif item[0] != "gas":
@@ -175,7 +175,7 @@ def off_axis_projection(
         if raise_error:
             raise RuntimeError(
                 "Can only perform off-axis projections for SPH fields, "
-                "Received '%s'" % (item,)
+                f"Received {item!r}"
             )
 
         normal = np.array(normal_vector)
@@ -228,12 +228,10 @@ def off_axis_projection(
                 )
 
             # Assure that the path length unit is in the default length units
-            # for the dataset by scaling the units of the smoothing length
-            path_length_unit = data_source.ds._get_field_info(
-                (ptype, "smoothing_length")
-            ).units
+            # for the dataset by scaling the units of the smoothing length,
+            # which in the above calculation is set to be code_length
             path_length_unit = Unit(
-                path_length_unit, registry=data_source.ds.unit_registry
+                "code_length", registry=data_source.ds.unit_registry
             )
             default_path_length_unit = data_source.ds.unit_system["length"]
             buf *= data_source.ds.quan(1, path_length_unit).in_units(
@@ -327,7 +325,10 @@ def off_axis_projection(
             return temp_weightfield
 
         data_source.ds.field_info.add_field(
-            weightfield, sampling_type="cell", function=_make_wf(item, weight)
+            weightfield,
+            sampling_type="cell",
+            function=_make_wf(item, weight),
+            units="",
         )
         # Now we have to tell the dataset to add it and to calculate
         # its dependencies..
@@ -376,7 +377,7 @@ def off_axis_projection(
 
     mylog.debug("Casting rays")
 
-    for (grid, mask) in data_source.blocks:
+    for grid, mask in data_source.blocks:
         data = []
         for f in fields:
             # strip units before multiplying by mask for speed

@@ -1,7 +1,7 @@
 import os
 import weakref
 from collections import defaultdict
-from functools import partial
+from functools import cached_property, partial
 
 import numpy as np
 
@@ -182,13 +182,9 @@ class GadgetFOFDataset(ParticleDataset):
     def halos_derived_field_list(self):
         return self._halos_ds.derived_field_list
 
-    _instantiated_halo_ds = None
-
-    @property
+    @cached_property
     def _halos_ds(self):
-        if self._instantiated_halo_ds is None:
-            self._instantiated_halo_ds = GadgetFOFHaloDataset(self)
-        return self._instantiated_halo_ds
+        return GadgetFOFHaloDataset(self)
 
     def _setup_classes(self):
         super()._setup_classes()
@@ -236,7 +232,7 @@ class GadgetFOFDataset(ParticleDataset):
         # Set a sane default for cosmological simulations.
         if self._unit_base is None and self.cosmological_simulation == 1:
             only_on_root(mylog.info, "Assuming length units are in Mpc/h (comoving)")
-            self._unit_base = dict(length=(1.0, "Mpccm/h"))
+            self._unit_base = {"length": (1.0, "Mpccm/h")}
         # The other same defaults we will use from the standard Gadget
         # defaults.
         unit_base = self._unit_base or {}

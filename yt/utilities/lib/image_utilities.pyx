@@ -7,12 +7,12 @@ Utilities for images
 
 import numpy as np
 
-cimport cython
 cimport numpy as np
+cimport cython
 
 from yt.utilities.lib.fp_utils cimport iclip
 
-
+@cython.wraparound(False)
 def add_points_to_greyscale_image(
         np.ndarray[np.float64_t, ndim=2] buffer,
         np.ndarray[np.uint8_t,   ndim=2] buffer_mask,
@@ -20,12 +20,18 @@ def add_points_to_greyscale_image(
         np.ndarray[np.float64_t, ndim=1] py,
         np.ndarray[np.float64_t, ndim=1] pv):
     cdef int i, j, pi
-    cdef int np = px.shape[0]
+    cdef int npx = px.shape[0]
     cdef int xs = buffer.shape[0]
     cdef int ys = buffer.shape[1]
-    for pi in range(np):
+    for pi in range(npx):
         j = <int> (xs * px[pi])
         i = <int> (ys * py[pi])
+        if (i < 0) or (i >= buffer.shape[0]) or (j < 0) or (j >= buffer.shape[1]):
+            # some particles might intersect the image buffer
+            # but actually be centered out of bounds. Skip those.
+            # see https://github.com/yt-project/yt/issues/4603
+            continue
+
         buffer[i, j] += pv[pi]
         buffer_mask[i, j] = 1
     return
@@ -36,12 +42,12 @@ def add_points_to_image(
         np.ndarray[np.float64_t, ndim=1] py,
         np.float64_t pv):
     cdef int i, j, k, pi
-    cdef int np = px.shape[0]
+    cdef int npx = px.shape[0]
     cdef int xs = buffer.shape[0]
     cdef int ys = buffer.shape[1]
     cdef int v
     v = iclip(<int>(pv * 255), 0, 255)
-    for pi in range(np):
+    for pi in range(npx):
         j = <int> (xs * px[pi])
         i = <int> (ys * py[pi])
         for k in range(3):

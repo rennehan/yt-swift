@@ -1,4 +1,5 @@
 import os
+from functools import partial
 
 import numpy as np
 
@@ -263,7 +264,20 @@ class RAMSESFieldInfo(FieldInfoContainer):
         p = RTFieldFileHandler.get_rt_parameters(self.ds).copy()
         p.update(self.ds.parameters)
         ngroups = p["nGroups"]
-        rt_c = p["rt_c_frac"] * units.c / (p["unit_l"] / p["unit_t"])
+        # Make sure rt_c_frac is at least as long as the number of levels in
+        # the simulation. Pad with either 1 (default) when using level-dependent
+        # reduced speed of light, otherwise pad with a constant value
+        if len(p["rt_c_frac"]) == 1:
+            pad_value = p["rt_c_frac"][0]
+        else:
+            pad_value = 1
+        rt_c_frac = np.pad(
+            p["rt_c_frac"],
+            (0, max(0, self.ds.max_level - len(["rt_c_frac"]) + 1)),
+            constant_values=pad_value,
+        )
+
+        rt_c = rt_c_frac * units.c / (p["unit_l"] / p["unit_t"])
         dens_conv = (p["unit_np"] / rt_c).value / units.cm**3
 
         ########################################
@@ -279,25 +293,25 @@ class RAMSESFieldInfo(FieldInfoContainer):
             function=_temp_IR,
             units=self.ds.unit_system["temperature"],
         )
+
+        def _species_density(field, data, species: str):
+            return data["gas", f"{species}_fraction"] * data["gas", "density"]
+
+        def _species_mass(field, data, species: str):
+            return data["gas", f"{species}_density"] * data["index", "cell_volume"]
+
         for species in ["H_p1", "He_p1", "He_p2"]:
-
-            def _species_density(field, data):
-                return data["gas", f"{species}_fraction"] * data["gas", "density"]
-
             self.add_field(
                 ("gas", species + "_density"),
                 sampling_type="cell",
-                function=_species_density,
+                function=partial(_species_density, species=species),
                 units=self.ds.unit_system["density"],
             )
-
-            def _species_mass(field, data):
-                return data["gas", f"{species}_density"] * data["index", "cell_volume"]
 
             self.add_field(
                 ("gas", species + "_mass"),
                 sampling_type="cell",
-                function=_species_mass,
+                function=partial(_species_mass, species=species),
                 units=self.ds.unit_system["mass"],
             )
 
@@ -305,7 +319,10 @@ class RAMSESFieldInfo(FieldInfoContainer):
         # Adding the fields in the rt_ files
         def gen_pdens(igroup):
             def _photon_density(field, data):
-                rv = data["ramses-rt", f"Photon_density_{igroup + 1}"] * dens_conv
+                # The photon density depends on the possibly level-dependent conversion factor.
+                ilvl = data["index", "grid_level"].astype(int)
+                dc = dens_conv[ilvl]
+                rv = data["ramses-rt", f"Photon_density_{igroup + 1}"] * dc
                 return rv
 
             return _photon_density
@@ -319,6 +336,9 @@ class RAMSESFieldInfo(FieldInfoContainer):
             )
 
         flux_conv = p["unit_pf"] / units.cm**2 / units.s
+        flux_unit = (
+            1 / self.ds.unit_system["time"] / self.ds.unit_system["length"] ** 2
+        ).units
 
         def gen_flux(key, igroup):
             def _photon_flux(field, data):
@@ -327,9 +347,6 @@ class RAMSESFieldInfo(FieldInfoContainer):
 
             return _photon_flux
 
-        flux_unit = (
-            1 / self.ds.unit_system["time"] / self.ds.unit_system["length"] ** 2
-        ).units
         for key in "xyz":
             for igroup in range(ngroups):
                 self.add_field(
@@ -393,15 +410,17 @@ class RAMSESFieldInfo(FieldInfoContainer):
                     )
                     return
                 if var.size == n1 * n2:
-                    tvals[tname] = dict(
-                        data=var.reshape((n1, n2), order="F"), unit=unit
-                    )
+                    tvals[tname] = {
+                        "data": var.reshape((n1, n2), order="F"),
+                        "unit": unit,
+                    }
                 else:
                     var = var.reshape((n1, n2, var.size // (n1 * n2)), order="F")
                     for i in range(var.shape[-1]):
-                        tvals[_cool_species[i]] = dict(
-                            data=var[:, :, i], unit="1/cm**3"
-                        )
+                        tvals[_cool_species[i]] = {
+                            "data": var[:, :, i],
+                            "unit": "1/cm**3",
+                        }
 
         # Add the mu field first, as it is needed for the number density
         interp = BilinearFieldInterpolator(

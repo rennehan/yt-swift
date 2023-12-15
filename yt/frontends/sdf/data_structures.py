@@ -1,4 +1,5 @@
 import os
+from functools import cached_property
 
 import numpy as np
 
@@ -29,7 +30,6 @@ class SDFDataset(ParticleDataset):
     _particle_mass_name = None
     _particle_coordinates_name = None
     _particle_velocity_name = None
-    _midx = None
     _skip_cache = True
     _subspace = False
 
@@ -114,7 +114,7 @@ class SDFDataset(ParticleDataset):
             self.domain_right_edge *= self.parameters.get("a", 1.0)
 
         self.domain_dimensions = np.ones(3, "int32")
-        if "do_periodic" in self.parameters and self.parameters["do_periodic"]:
+        if self.parameters.get("do_periodic", False):
             self._periodicity = (True, True, True)
         else:
             self._periodicity = (False, False, False)
@@ -135,22 +135,17 @@ class SDFDataset(ParticleDataset):
         self.filename_template = self.parameter_filename
         self.file_count = 1
 
-    @property
+    @cached_property
     def midx(self):
-        if self._midx is None:
-            if self.midx_filename is not None:
+        if self.midx_filename is None:
+            raise RuntimeError("SDF index0 file not supplied in load.")
 
-                if "http" in self.midx_filename:
-                    sdf_class = HTTPSDFRead
-                else:
-                    sdf_class = SDFRead
-                indexdata = sdf_class(self.midx_filename, header=self.midx_header)
-                self._midx = SDFIndex(
-                    self.sdf_container, indexdata, level=self.midx_level
-                )
-            else:
-                raise RuntimeError("SDF index0 file not supplied in load.")
-        return self._midx
+        if "http" in self.midx_filename:
+            sdf_class = HTTPSDFRead
+        else:
+            sdf_class = SDFRead
+        indexdata = sdf_class(self.midx_filename, header=self.midx_header)
+        return SDFIndex(self.sdf_container, indexdata, level=self.midx_level)
 
     def _set_code_unit_attributes(self):
         setdefaultattr(
@@ -188,8 +183,11 @@ class SDFDataset(ParticleDataset):
             # Grab a whole 4k page.
             line = next(hreq.iter_content(4096))
         elif os.path.isfile(sdf_header):
-            with open(sdf_header, encoding="ISO-8859-1") as f:
-                line = f.read(10).strip()
+            try:
+                with open(sdf_header, encoding="ISO-8859-1") as f:
+                    line = f.read(10).strip()
+            except PermissionError:
+                return False
         else:
             return False
         return line.startswith("# SDF")

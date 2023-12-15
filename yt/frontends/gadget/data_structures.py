@@ -1,5 +1,4 @@
 import os
-import stat
 import struct
 from typing import Type
 
@@ -103,9 +102,9 @@ class GadgetBinaryHeader:
         else:
             raise RuntimeError(
                 "Gadget snapshot file is likely corrupted! "
-                "The first 4 bytes represent %s (as little endian int32). "
-                "But we are looking for %s (for format 1) or 8 (for format 2)."
-                % (rhead, first_header_size)
+                f"The first 4 bytes represent {rhead} (as little endian int32). "
+                f"But we are looking for {first_header_size} (for format 1) "
+                "or 8 (for format 2)."
             )
 
     @property
@@ -367,7 +366,6 @@ class GadgetDataset(SPHDataset):
         return header
 
     def _parse_parameter_file(self):
-
         hvals = self._get_hvals()
 
         # Rennehan
@@ -547,10 +545,10 @@ class GadgetDataset(SPHDataset):
                 only_on_root(
                     mylog.info, "Assuming length units are in kpc/h (comoving)"
                 )
-                self._unit_base = dict(length=(1.0, "kpccm/h"))
+                self._unit_base = {"length": (1.0, "kpccm/h")}
             else:
                 only_on_root(mylog.info, "Assuming length units are in kpc (physical)")
-                self._unit_base = dict(length=(1.0, "kpc"))
+                self._unit_base = {"length": (1.0, "kpc")}
 
         # If units passed in by user, decide what to do about
         # co-moving and factors of h
@@ -733,6 +731,15 @@ class GadgetHDF5Dataset(GadgetDataset):
         if "Parameters" in handle:
             hvals.update((str(k), v) for k, v in handle["/Parameters"].attrs.items())
         handle.close()
+
+        # ensure that 1-element arrays are reduced to scalars
+        updated_hvals = {}
+        for hvalname, value in hvals.items():
+            if isinstance(value, np.ndarray) and value.size == 1:
+                mylog.info("Reducing single-element array %s to scalar.", hvalname)
+                updated_hvals[hvalname] = value.item()
+        hvals.update(updated_hvals)
+
         return hvals
 
     def _get_uvals(self):
@@ -743,11 +750,9 @@ class GadgetHDF5Dataset(GadgetDataset):
         return uvals
 
     def _set_owls_eagle(self):
-
         self.dimensionality = 3
         self.refine_by = 2
         self.parameters["HydroMethod"] = "sph"
-        self.unique_identifier = int(os.stat(self.parameter_filename)[stat.ST_CTIME])
 
         self._unit_base = self._get_uvals()
         self._unit_base["cmcm"] = 1.0 / self._unit_base["UnitLength_in_cm"]
@@ -787,7 +792,6 @@ class GadgetHDF5Dataset(GadgetDataset):
         self.file_count = self.parameters["NumFilesPerSnapshot"]
 
     def _set_owls_eagle_units(self):
-
         # note the contents of the HDF5 Units group are in _unit_base
         # note the velocity stored on disk is sqrt(a) dx/dt
         # physical velocity [cm/s] = a dx/dt

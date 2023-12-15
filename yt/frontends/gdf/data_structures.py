@@ -1,11 +1,13 @@
 import os
 import weakref
+from functools import cached_property
 
 import numpy as np
 
 from yt.data_objects.index_subobjects.grid_patch import AMRGridPatch
 from yt.data_objects.static_output import Dataset
 from yt.funcs import just_one, setdefaultattr
+from yt.geometry.api import Geometry
 from yt.geometry.grid_geometry_handler import GridIndex
 from yt.units.dimensions import dimensionless as sympy_one  # type: ignore
 from yt.units.unit_object import Unit  # type: ignore
@@ -51,7 +53,6 @@ class GDFGrid(AMRGridPatch):
 
 
 class GDFHierarchy(GridIndex):
-
     grid = GDFGrid
 
     def __init__(self, ds, dataset_type="grid_data_format"):
@@ -228,6 +229,11 @@ class GDFDataset(Dataset):
 
         h5f.close()
 
+    @cached_property
+    def unique_identifier(self) -> str:
+        with h5py.File(self.parameter_filename, mode="r") as handle:
+            return str(handle["/simulation_parameters"].attrs["unique_identifier"])
+
     def _parse_parameter_file(self):
         self._handle = h5py.File(self.parameter_filename, mode="r")
         if "data_software" in self._handle["gridded_data_format"].attrs:
@@ -240,7 +246,7 @@ class GDFDataset(Dataset):
         if self.geometry is None:
             geometry = just_one(sp.get("geometry", 0))
             try:
-                self.geometry = GEOMETRY_TRANS[geometry]
+                self.geometry = Geometry(GEOMETRY_TRANS[geometry])
             except KeyError as e:
                 raise YTGDFUnknownGeometry(geometry) from e
         self.parameters.update(sp)
@@ -253,7 +259,6 @@ class GDFDataset(Dataset):
         self.refine_by = refine_by
         self.dimensionality = sp["dimensionality"]
         self.current_time = sp["current_time"]
-        self.unique_identifier = sp["unique_identifier"]
         self.cosmological_simulation = sp["cosmological_simulation"]
         if sp["num_ghost_zones"] != 0:
             raise RuntimeError

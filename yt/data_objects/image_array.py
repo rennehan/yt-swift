@@ -1,7 +1,6 @@
 import numpy as np
 from unyt import unyt_array
 
-from yt._maintenance.deprecation import issue_deprecation_warning
 from yt.config import ytcfg
 from yt.visualization.image_writer import write_bitmap, write_image
 
@@ -76,15 +75,7 @@ class ImageArray(unyt_array):
         registry=None,
         info=None,
         bypass_validation=False,
-        input_units=None,
     ):
-        if input_units is not None:
-            issue_deprecation_warning(
-                "'input_units' is deprecated. Please use 'units'.",
-                since="4.0.0",
-                removal="4.2.0",
-            )
-            units = input_units
         obj = super().__new__(
             cls, input_array, units, registry, bypass_validation=bypass_validation
         )
@@ -264,7 +255,6 @@ class ImageArray(unyt_array):
         sigma_clip=None,
         background="black",
         rescale=True,
-        clip_ratio=None,
     ):
         r"""Writes ImageArray to png file.
 
@@ -322,20 +312,9 @@ class ImageArray(unyt_array):
         if filename is not None and filename[-4:] != ".png":
             filename += ".png"
 
-        if clip_ratio is not None:
-            issue_deprecation_warning(
-                "The 'clip_ratio' keyword argument is a deprecated alias for 'sigma_clip'. "
-                "Please use 'sigma_clip' directly.",
-                since="3.3",
-                removal="4.2",
-            )
-            sigma_clip = clip_ratio
-
         if sigma_clip is not None:
-            nz = out[:, :, :3][out[:, :, :3].nonzero()]
-            return write_bitmap(
-                out.swapaxes(0, 1), filename, nz.mean() + sigma_clip * nz.std()
-            )
+            clip_value = self._clipping_value(sigma_clip, im=out)
+            return write_bitmap(out.swapaxes(0, 1), filename, clip_value)
         else:
             return write_bitmap(out.swapaxes(0, 1), filename)
 
@@ -443,3 +422,11 @@ class ImageArray(unyt_array):
             if not filename.endswith(".h5"):
                 filename = filename + ".h5"
             self.write_hdf5(filename, dataset_name)
+
+    def _clipping_value(self, sigma_clip, im=None):
+        # return the max value to clip with given a sigma_clip value. If im
+        # is None, the current instance is used
+        if im is None:
+            im = self
+        nz = im[:, :, :3][im[:, :, :3].nonzero()]
+        return nz.mean() + sigma_clip * nz.std()

@@ -1,6 +1,6 @@
 import numpy as np
 
-from yt.units.dimensions import current_mks  # type: ignore
+from yt.units.dimensions import current_mks
 from yt.units.unit_object import Unit  # type: ignore
 from yt.utilities.chemical_formulas import compute_mu
 from yt.utilities.lib.misc_utilities import obtain_relative_velocity_vector
@@ -114,18 +114,6 @@ def setup_fluid_fields(registry, ftype="gas", slice_info=None):
         function=_kinetic_energy_density,
         units=unit_system["pressure"],
         validators=[ValidateParameter("bulk_velocity")],
-    )
-
-    registry.alias(
-        (ftype, "kinetic_energy"),
-        (ftype, "kinetic_energy_density"),
-        deprecate=("4.0.0", "4.1.0"),
-    )
-
-    registry.alias(
-        (ftype, "thermal_energy"),
-        (ftype, "specific_thermal_energy"),
-        deprecate=("4.0.0", "4.1.0"),
     )
 
     def _mach_number(field, data):
@@ -254,7 +242,6 @@ def setup_fluid_fields(registry, ftype="gas", slice_info=None):
 
 
 def setup_gradient_fields(registry, grad_field, field_units, slice_info=None):
-
     assert isinstance(grad_field, tuple)
     ftype, fname = grad_field
     if slice_info is None:
