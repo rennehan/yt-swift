@@ -41,7 +41,6 @@ _frontends = [
     "rockstar",
     "sdf",
     "stream",
-    "swift",
     "pkdgrav",
     "tipsy",
     "ytdata",
