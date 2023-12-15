@@ -404,6 +404,23 @@ def test_sphere_callback():
         assert_fname(p.save(prefix)[0])
 
 
+def test_invalidated_annotations():
+    # check that annotate_sphere and annotate_arrow succeed on re-running after
+    # an operation that invalidates the plot (set_font_size), see
+    # https://github.com/yt-project/yt/issues/4698
+
+    ds = fake_amr_ds(fields=("density",), units=("g/cm**3",))
+    p = SlicePlot(ds, "z", ("gas", "density"))
+    p.annotate_sphere([0.5, 0.5, 0.5], 0.1)
+    p.set_font_size(24)
+    p.render()
+
+    p = SlicePlot(ds, "z", ("gas", "density"))
+    p.annotate_arrow([0.5, 0.5, 0.5])
+    p.set_font_size(24)
+    p.render()
+
+
 def test_text_callback():
     with _cleanup_fname() as prefix:
         ax = "z"
@@ -913,17 +930,20 @@ def test_streamline_callback():
             p.annotate_streamlines(
                 ("gas", "velocity_x"),
                 ("gas", "velocity_y"),
-                field_color=("stream", "magvel"),
+                color=("stream", "magvel"),
             )
             assert_fname(p.save(prefix)[0])
             check_axis_manipulation(p, prefix)
 
+            # a more thorough example involving many keyword arguments
             p = SlicePlot(ds, ax, ("gas", "density"))
             p.annotate_streamlines(
                 ("gas", "velocity_x"),
                 ("gas", "velocity_y"),
-                field_color=("stream", "magvel"),
-                display_threshold=0.5,
+                linewidth=("gas", "density"),
+                linewidth_upscaling=3,
+                color=("stream", "magvel"),
+                color_threshold=0.5,
                 cmap="viridis",
                 arrowstyle="->",
             )

@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import tempfile
 from importlib.metadata import version
 from importlib.util import find_spec
@@ -22,7 +23,13 @@ from yt.utilities.answer_testing.testing_utilities import (
 MPL_VERSION = Version(version("matplotlib"))
 NUMPY_VERSION = Version(version("numpy"))
 PILLOW_VERSION = Version(version("pillow"))
-SETUPTOOLS_VERSION = Version(version("setuptools"))
+
+# setuptools does not ship with the standard lib starting in Python 3.12, so we need to
+# be resilient if it's not available at runtime
+if find_spec("setuptools") is not None:
+    SETUPTOOLS_VERSION = Version(version("setuptools"))
+else:
+    SETUPTOOLS_VERSION = None
 
 
 def pytest_addoption(parser):
@@ -105,7 +112,7 @@ def pytest_configure(config):
     ):
         config.addinivalue_line("filterwarnings", value)
 
-    if SETUPTOOLS_VERSION >= Version("67.3.0"):
+    if SETUPTOOLS_VERSION is not None and SETUPTOOLS_VERSION >= Version("67.3.0"):
         # may be triggered by multiple dependencies
         # see https://github.com/glue-viz/glue/issues/2364
         # see https://github.com/matplotlib/matplotlib/issues/25244
@@ -116,19 +123,13 @@ def pytest_configure(config):
             r"is preferred to `pkg_resources\.declare_namespace`\.:DeprecationWarning",
         )
 
-    if SETUPTOOLS_VERSION >= Version("67.5.0"):
+    if SETUPTOOLS_VERSION is not None and SETUPTOOLS_VERSION >= Version("67.5.0"):
         # may be triggered by multiple dependencies
         # see https://github.com/glue-viz/glue/issues/2364
         # see https://github.com/matplotlib/matplotlib/issues/25244
         config.addinivalue_line(
             "filterwarnings",
             "ignore:pkg_resources is deprecated as an API:DeprecationWarning",
-        )
-
-    if MPL_VERSION < Version("3.5.0"):
-        config.addinivalue_line(
-            "filterwarnings",
-            r"ignore:distutils Version classes are deprecated:DeprecationWarning",
         )
 
     if MPL_VERSION < Version("3.5.2") and PILLOW_VERSION >= Version("9.1"):
@@ -144,25 +145,7 @@ def pytest_configure(config):
             r"Use Palette\.ADAPTIVE instead\.:DeprecationWarning",
         )
 
-    if NUMPY_VERSION < Version("1.19") and MPL_VERSION < Version("3.4"):
-        # This warning is triggered from matplotlib in exactly one test at the time of writing
-        # and exclusively on the minimal test env. Upgrading numpy or matplotlib resolves
-        # the issue, so we can afford to ignore it.
-        config.addinivalue_line(
-            "filterwarnings",
-            "ignore:invalid value encountered in less_equal:RuntimeWarning",
-        )
-
     if NUMPY_VERSION >= Version("1.25"):
-        if find_spec("cartopy") is not None and (
-            Version(version("cartopy")) <= Version("0.21.1")
-        ):
-            # https://github.com/SciTools/cartopy/pull/2194
-            config.addinivalue_line(
-                "filterwarnings",
-                "ignore:Conversion of an array with ndim > 0 to a scalar is deprecated"
-                ":DeprecationWarning",
-            )
         if find_spec("h5py") is not None and (
             Version(version("h5py")) < Version("3.9")
         ):
@@ -186,17 +169,13 @@ def pytest_configure(config):
             ),
         )
 
-    if find_spec("cartopy") is not None:
-        # this warning is triggered from cartopy 0.21.1
-        # see https://github.com/SciTools/cartopy/issues/2113
-        SHAPELY_VERSION = Version(version("shapely"))
-        if SHAPELY_VERSION >= Version("2.0"):
-            config.addinivalue_line(
-                "filterwarnings",
-                (
-                    r"ignore:The 'geom_factory' function is deprecated in Shapely 2\.0:DeprecationWarning"
-                ),
-            )
+    if sys.version_info >= (3, 12):
+        # already patched (but not released) upstream:
+        # https://github.com/dateutil/dateutil/pull/1285
+        config.addinivalue_line(
+            "filterwarnings",
+            r"ignore:datetime\.datetime\.utcfromtimestamp\(\) is deprecated:DeprecationWarning",
+        )
 
 
 def pytest_collection_modifyitems(config, items):

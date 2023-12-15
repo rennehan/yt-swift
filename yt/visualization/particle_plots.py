@@ -1,5 +1,3 @@
-from typing import List
-
 import numpy as np
 
 from yt._maintenance.deprecation import issue_deprecation_warning
@@ -25,7 +23,7 @@ class ParticleDummyDataSource:
     _dimensionality = 2
     _con_args = ("center", "axis", "width", "fields", "weight_field")
     _tds_attrs = ()
-    _key_fields: List[str] = []
+    _key_fields: list[str] = []
 
     def __init__(
         self,
@@ -356,7 +354,8 @@ class ParticleProjectionPlot(PWViewerMPL, NormalPlot):
         if axis is not None:
             issue_deprecation_warning(
                 "The 'axis' argument is a deprecated alias for the 'normal' argument. ",
-                since="4.2.0",
+                stacklevel=3,
+                since="4.2",
             )
             normal = axis
         if normal is None:

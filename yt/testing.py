@@ -13,7 +13,6 @@ from unittest import SkipTest
 
 import matplotlib
 import numpy as np
-import pytest
 from more_itertools import always_iterable
 from numpy.random import RandomState
 from unyt.exceptions import UnitOperationError
@@ -844,7 +843,7 @@ def expand_keywords(keywords, full=False):
     """
 
     issue_deprecation_warning(
-        "yt.testing.expand_keywords is deprecated", since="4.2", stacklevel=2
+        "yt.testing.expand_keywords is deprecated", since="4.2", stacklevel=3
     )
 
     # if we want every possible combination of keywords, use iter magic
@@ -939,6 +938,9 @@ def requires_module_pytest(*module_names):
 
     So that it can be later renamed to `requires_module`.
     """
+    # note: import pytest here so that it is not a hard requirement for
+    # importing yt.testing see https://github.com/yt-project/yt/issues/4507
+    import pytest
 
     def deco(func):
         missing = [name for name in module_names if find_spec(name) is None]
@@ -1197,7 +1199,8 @@ def run_nose(
         "yt.run_nose (aka yt.testing.run_nose) is deprecated. "
         "Please do not rely on this function as it will be removed "
         "in the process of migrating yt tests from nose to pytest.",
-        since="4.1.0",
+        stacklevel=3,
+        since="4.1",
     )
 
     from yt.utilities.logger import ytLogger as mylog
@@ -1438,7 +1441,9 @@ class ParticleSelectionComparison:
             # NULP should be OK.  This is mostly for stuff like Rockstar, where
             # the f32->f64 casting happens at different places depending on
             # which code path we use.
-            assert_array_almost_equal_nulp(sel_pos, obj_results, 5)
+            assert_array_almost_equal_nulp(
+                np.asarray(sel_pos), np.asarray(obj_results), 5
+            )
 
     def run_defaults(self):
         """
